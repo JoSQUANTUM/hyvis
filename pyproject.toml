@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools >= 40.8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hyvis"
+version = "0.1.0"
+dependencies = [
+  "numpy>=1.26.4",
+  "scikit-learn>=1.4.2",
+  "matplotlib>=3.8.4"
+]
+requires-python = ">=3.10"
+authors = [
+  { name="Lucas Euler", email="lucas.euler@jos-quantum.de" },
+]
+description = "A package for visualization of quantum-classical hybrid systems."
+readme = "README.md"
+
+[project.optional-dependencies]
+qaoa = [
+  "qiskit>=1.1.1",
+  "qiskit-aer>=0.14.2"
+]
