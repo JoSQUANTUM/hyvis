@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/dcfce6db-2765-4afc-885a-379eca97f0a7" />
+</p>
+
 # HYVIS
 
 Package for visualization of high dimensional function landscapes,
