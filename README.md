@@ -1,12 +1,9 @@
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/dcfce6db-2765-4afc-885a-379eca97f0a7" />
-</p>
-
 # HYVIS
 
 Package for visualization of high dimensional function landscapes,
 in particular those in quantum-classical hybrid systems.
 
+Provided by JoS Quantum.
 
 # Installation
 
@@ -38,7 +35,7 @@ The following notebooks demonstrate the most relevant features:
 
 - [Basics](notebooks/example_basic_scan.ipynb): A toy function scanned in the most simple ways.
 - [Hessian](notebooks/example_hessian.ipynb): Using the Hessian to better understand a landscape.
-- [Videos](notebooks/example_video_scan.ipynb): An animated video of scans along a trajectory.
+- [Videos](notebooks/example_video_scan.ipynb): Animated videos of scans moving through the hyperspace.
 - [Non-trivial Lanscapes](notebooks/example_nontrivial_landscapes.ipynb): The package applied to more involved loss functions. (requires hyvis[qaoa])
 
 
@@ -46,4 +43,4 @@ The following notebooks demonstrate the most relevant features:
 
 This package was developed by Lucas Euler. For questions and ideas please contact lucas.euler@jos-quantum.de .
 
-Special thanks to Jason Ledwidge, Marcelin Gallezot, Alessio Paesano and Henrikh Baghramyan at JoS QUANTUM for their support and insight.
+Special thanks to Zi Chua, Jason Ledwidge, Marcelin Gallezot, Alessio Paesano and Henrikh Baghramyan at JoS QUANTUM for their support and insight.

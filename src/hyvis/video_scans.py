@@ -1,21 +1,22 @@
 """This is a module for creating videos of scans of a function landscape."""
 
+from typing import Callable, List, Optional, Union
+from warnings import warn
+
 import numpy as np
-from typing import Callable, Optional, Union, List
+from matplotlib import animation
+from matplotlib import colors as mcolors
+from matplotlib import pyplot as plt
+from matplotlib.collections import LineCollection
 from sklearn.decomposition import PCA
 
-from matplotlib import pyplot as plt
-from matplotlib import animation
-from matplotlib.collections import LineCollection
-from matplotlib import colors as mcolors
-
 from .basic_scans import (
-    landscape_scan_linear,
     ScanCollection,
-    hessian_scan,
     collective_scan_linear,
+    hessian_scan,
+    landscape_scan_linear,
 )
-from .dr_tools import AffineSubspace, subspace_projection, numeric_hessian
+from .dr_tools import AffineSubspace, numeric_hessian, subspace_projection
 
 
 class VideoScan:
@@ -59,14 +60,18 @@ class VideoScan:
 
     def animate(
         self,
-        show_trajectory=True,
-        trajectory_fade=True,
-        trajectory_color="red",
+        xlabel: Optional[str] = None,
+        ylabel: Optional[str] = None,
+        title: Optional[str] = None,
+        show_trajectory: Optional[bool] = True,
+        trajectory_fade: Optional[bool] = True,
+        trajectory_color: Optional[str] = "red",
         **plot_kwargs,
     ):
         """This method creates an animation of the video.
         By default this includes projections of the remaining trajectory onto each
-        frame.
+        frame. Note that if the range for the colors is not fixed (e.b. by setting
+        vmin and vmax in plot_kwargs) then each frame will be colored separately.
 
         Input:
             - show_trajectory: whether to include the lineplot
@@ -79,6 +84,11 @@ class VideoScan:
             None, it immediately opens a video player when used in a notebook
 
         """
+
+        if "vmin" not in plot_kwargs or "vmax" not in plot_kwargs:
+            warn(
+                """The range of the colormap has not been specified, each frame will be colored individually. To get consistent coloring specify vmin and vmax as arguments for this method."""
+            )
 
         plt.rcParams["animation.html"] = "jshtml"
         plt.ioff()
@@ -100,45 +110,49 @@ class VideoScan:
                 ],
                 **plot_kwargs,
             )
-            plt.xlabel("first scan direction")
-            plt.ylabel("second scan direction")
+            plt.xlabel(xlabel)
+            plt.ylabel(ylabel)
+            plt.title(title)
 
-            if show_trajectory is True:
-                # getting the projected trajectory
-                coeff = np.zeros([step_num - t, 2])
-                for step_id in range(t, step_num):
+            if self.trajectory is not None:
+                if show_trajectory is True:
+                    # getting the projected trajectory
+                    coeff = np.zeros([step_num - t, 2])
+                    for step_id in range(t, step_num):
+                        coeff[step_id - t, :] = np.linalg.lstsq(
+                            self.subspaces[t].directions.transpose(),
+                            (
+                                self.trajectory[step_id, :]
+                                - self.subspaces[t].center
+                            ).transpose(),
+                            rcond=None,
+                        )[0].flatten()
 
-                    coeff[step_id - t, :] = np.linalg.lstsq(
-                        self.subspaces[t].directions.transpose(),
-                        (
-                            self.trajectory[step_id, :] - self.subspaces[t].center
-                        ).transpose(),
-                        rcond=None,
-                    )[0].flatten()
+                    x = coeff[:, 0]
+                    y = coeff[:, 1]
+                    reststeps = x.shape[0]
 
-                x = coeff[:, 0]
-                y = coeff[:, 1]
-                reststeps = x.shape[0]
+                    colors = [mcolors.to_rgba(trajectory_color)] * reststeps
+                    if trajectory_fade is True:
+                        fade = (
+                            1
+                            + np.cos(
+                                np.pi
+                                * np.linspace(0, reststeps - 1, reststeps)
+                                / (reststeps)
+                            )
+                        ) / 2
+                        for step_id in range(reststeps):
+                            step_color = list(colors[step_id])
+                            step_color[3] = fade[step_id]
+                            colors[step_id] = tuple(step_color)
 
-                colors = [mcolors.to_rgba(trajectory_color)] * reststeps
-                if trajectory_fade is True:
-                    fade = (
-                        1
-                        + np.cos(
-                            np.pi
-                            * np.linspace(0, reststeps - 1, reststeps)
-                            / (reststeps)
-                        )
-                    ) / 2
-                    for step_id in range(reststeps):
-                        step_color = list(colors[step_id])
-                        step_color[3] = fade[step_id]
-                        colors[step_id] = tuple(step_color)
-
-                points = np.array([x, y]).T.reshape(-1, 1, 2)
-                segments = np.concatenate([points[:-1], points[1:]], axis=1)
-                lc = LineCollection(segments, colors=colors)
-                ax.add_collection(lc, autolim=False)
+                    points = np.array([x, y]).T.reshape(-1, 1, 2)
+                    segments = np.concatenate(
+                        [points[:-1], points[1:]], axis=1
+                    )
+                    lc = LineCollection(segments, colors=colors)
+                    ax.add_collection(lc, autolim=False)
 
         frames = len(self.subspaces)
         ani = animation.FuncAnimation(fig, create_animation, frames=frames)
@@ -215,23 +229,130 @@ class VideoCollectiveScan:
             ax = plt.gca()
             yabs_max = abs(max(ax.get_ylim(), key=abs))
             ax.set_ylim(ymin=-yabs_max, ymax=yabs_max)
-            # plt.imshow(
-            #     np.transpose(self.result[:, :, t]),
-            #     extent=[
-            #         self.scope[0, 0],
-            #         self.scope[0, 1],
-            #         self.scope[1, 0],
-            #         self.scope[1, 1],
-            #     ],
-            #     **plot_kwargs
-            # )
-            # plt.xlabel("first scan direction")
-            # plt.ylabel("second scan direction")
 
         frames = len(self.scans)
         ani = animation.FuncAnimation(fig, create_animation, frames=frames)
 
         return ani
+
+
+def volume_scan(
+    func: Callable[[np.ndarray], float],
+    subspace: AffineSubspace,
+    scope: Optional[Union[np.ndarray, float]] = 5,
+    resolution: Optional[Union[int, np.ndarray]] = 10,
+    pools: Optional[int] = 1,
+) -> VideoScan:
+    """This function creates a videoscan where each frame scans the subspace except
+    in the last direction, which is instead used to move the space. For example,
+    if the subspace is 3D this will create a video of 2D scans.
+
+    The subspace should have at least 3 dimensions. It can have more, but then
+    it can not be animated.
+    """
+
+    d_num = subspace.directions.shape[0]
+
+    if not isinstance(scope, np.ndarray):
+        scope = scope * np.append(-np.ones([d_num, 1]), np.ones([d_num, 1]), 1)
+
+    if not (scope[:, 0] < scope[:, 1]).all():
+        raise ValueError(
+            """scope[id_d,0] must be strictly smaller than scope[id_d,1] for each
+            direction."""
+        )
+
+    if np.isscalar(resolution):
+        resolution = resolution * np.ones(d_num, dtype=int)
+
+    scanres = resolution[-1]
+    subspaces = []
+    for i_scan in range(scanres):
+        center = np.array(
+            [
+                (
+                    subspace.center.flatten()
+                    + scope[-1, 0] * subspace.directions[-1, :]
+                    + (-scope[-1, 0] + scope[-1, 1])
+                    * i_scan
+                    * ((-scope[-1, 0] + scope[-1, 1]) / (scanres - 1))
+                    * subspace.directions[-1, :]
+                )
+            ]
+        )
+        subspaces.append(
+            AffineSubspace(subspace.directions[:-1, :], center=center)
+        )
+
+    scan = landscape_scan_linear(
+        func=func,
+        subspace=subspace,
+        scope=scope,
+        resolution=resolution,
+        pools=pools,
+    )
+
+    return VideoScan(
+        result=scan.result,
+        subspaces=subspaces,
+        scope=scan.scope,
+        func=func,
+    )
+
+
+def operator_scan(
+    func: Callable[[np.ndarray], float],
+    subspace: AffineSubspace,
+    operator: Optional[np.ndarray] = None,
+    shift: Optional[np.ndarray] = None,
+    steps: Optional[int] = 10,
+    scope: Optional[Union[np.ndarray, float]] = 5,
+    resolution: Optional[Union[int, np.ndarray]] = 10,
+    pools: Optional[int] = 1,
+) -> VideoScan:
+    """performs some number of scans, where in each step the
+    subspace is transformed by an affine linear operator"""
+
+    d_dim = subspace.directions.shape[1]
+    d_num = subspace.directions.shape[0]
+
+    if not isinstance(scope, np.ndarray):
+        scope = scope * np.append(-np.ones([d_num, 1]), np.ones([d_num, 1]), 1)
+
+    if not (scope[:, 0] < scope[:, 1]).all():
+        raise ValueError(
+            """scope[id_d,0] must be strictly smaller than scope[id_d,1] for each
+            direction."""
+        )
+
+    if np.isscalar(resolution):
+        resolution = resolution * np.ones(d_num, dtype=int)
+
+    if operator is None:
+        operator = np.eye(d_dim)
+    if shift is None:
+        shift = np.zeros(shape=subspace.center.shape)
+
+    result = np.zeros(shape=np.append(resolution, steps))
+
+    subspaces = []
+    for i_step in range(steps):
+        scan = landscape_scan_linear(
+            func, subspace, scope, resolution, pools=pools
+        )
+        subspaces.append(subspace)
+        result[..., i_step] = scan.result
+
+        directions = (operator @ subspace.directions.T).T
+        center = subspace.center + shift
+        subspace = AffineSubspace(directions=directions, center=center)
+
+    return VideoScan(
+        result=result,
+        subspaces=subspaces,
+        scope=scope,
+        func=func,
+    )
 
 
 def trajectory_scan_stepwise_pca(
@@ -295,7 +416,9 @@ def trajectory_scan_stepwise_pca(
 
     subspace = AffineSubspace(directions=directions, center=center)
 
-    scan = landscape_scan_linear(func, subspace, scope, resolution, pools=pools)
+    scan = landscape_scan_linear(
+        func, subspace, scope, resolution, pools=pools
+    )
     result[:, :, step_id] = scan.result
     subspaces[step_id] = subspace
 
@@ -317,7 +440,9 @@ def trajectory_scan_stepwise_pca(
         )
         directions_old = directions
         directions = PCA(n_components=2).fit(cloud).components_
-        directions = np.dot(np.dot(directions, directions.transpose()), directions)
+        directions = np.dot(
+            np.dot(directions, directions.transpose()), directions
+        )
         # now making sure that directions dont 'flip sign' by matching them with
         for d_id in range(d_num):
             if np.linalg.norm(
@@ -328,7 +453,9 @@ def trajectory_scan_stepwise_pca(
         subspace = AffineSubspace(
             directions=directions, center=np.array([trajectory[step_id, :]])
         )
-        scan = landscape_scan_linear(func, subspace, scope, resolution, pools=pools)
+        scan = landscape_scan_linear(
+            func, subspace, scope, resolution, pools=pools
+        )
 
         result[:, :, step_id] = scan.result
         subspaces[step_id] = subspace
@@ -344,7 +471,9 @@ def trajectory_scan_stepwise_pca(
 
     subspace = AffineSubspace(directions=directions, center=center)
 
-    scan = landscape_scan_linear(func, subspace, scope, resolution, pools=pools)
+    scan = landscape_scan_linear(
+        func, subspace, scope, resolution, pools=pools
+    )
     result[:, :, step_id] = scan.result
     subspaces[step_id] = subspace
 
@@ -379,7 +508,7 @@ def trajectory_scan_stepwise_hessian(
 
         func: The function that defines the landscape.
 
-        trajectory: an array of points in the lanscape
+        trajectory: an array of points in the landscape
             must be of shape (number of steps, dimension of superspace)
 
         scope: How far to scan in each direction of subspace.
@@ -413,7 +542,6 @@ def trajectory_scan_stepwise_hessian(
 
     # doing the stepwise pca scan for the remaining steps
     for step_id in range(0, traj_length - 1):
-
         # getting direction of next step
         stepspace = AffineSubspace(
             directions=np.array(
@@ -433,7 +561,9 @@ def trajectory_scan_stepwise_hessian(
         H.calc_evs()
 
         directions_old = directions
-        directions = np.dot(H.eigenvectors.transpose(), stepspace_oc.directions)
+        directions = np.dot(
+            H.eigenvectors.transpose(), stepspace_oc.directions
+        )
         # directions = stepspace_oc.directions
         # now making sure that directions dont 'flip sign' by matching them with
         # the previous step
@@ -444,7 +574,9 @@ def trajectory_scan_stepwise_hessian(
                 directions[d_id, :] = -directions[d_id, :]
 
         stepspace_h = AffineSubspace(
-            directions=directions, center=stepspace_oc.center, orthonormalize=False
+            directions=directions,
+            center=stepspace_oc.center,
+            orthonormalize=False,
         )
 
         scans[step_id] = collective_scan_linear(

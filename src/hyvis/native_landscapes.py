@@ -1,10 +1,15 @@
 """This module collects some examples of loss functions,
 as well as a simple gradient descent function."""
 
-import numpy as np
 from typing import Callable
-from qiskit import QuantumCircuit, QuantumRegister, ClassicalRegister, transpile
-from qiskit_aer import AerSimulator
+
+import numpy as np
+from qiskit import (
+    ClassicalRegister,
+    QuantumCircuit,
+    QuantumRegister,
+)
+from qiskit.providers.basic_provider import BasicProvider
 
 from hyvis.dr_tools import AffineSubspace, numeric_gradient
 
@@ -117,7 +122,8 @@ def relative_entropy_multivariate_gaussians(
         return (
             np.trace(np.dot(np.linalg.inv(sigma2), sigma1))
             + np.dot(
-                np.transpose(mu2 - mu1), np.dot(np.linalg.inv(sigma2), (mu2 - mu1))
+                np.transpose(mu2 - mu1),
+                np.dot(np.linalg.inv(sigma2), (mu2 - mu1)),
             )
             + np.log(np.linalg.det(sigma2) / np.linalg.det(sigma1))
             - k
@@ -200,6 +206,7 @@ def qaoa_circuit_with_layers(w, gamma_list, beta_list):
     qc = initialize_circuit(qc, vertices_r)
     for gamma, beta in zip(gamma_list, beta_list):
         qc = u_c(gamma, qc, vertices_r, w)
+        qc.barrier()
         qc = u_m(beta, qc, vertices_r)
     qc.measure(vertices_r, classic_r)
     return qc
@@ -229,10 +236,9 @@ def maxcut_landscape_qaoa(parameters: list, w: np.ndarray) -> float:
     beta_list = parameters[p:]
     qc = qaoa_circuit_with_layers(w, gamma_list, beta_list)
 
-    simulator = AerSimulator()
-    compiled_qc = transpile(qc)  # Optimize for simulator
-    job = simulator.run(compiled_qc, shots=1024)  # Adjust shots as needed
-    counts = job.result().get_counts(qc)
+    backend = BasicProvider().get_backend("basic_simulator")
+    job = backend.run(qc, shots=1024)
+    counts = job.result().get_counts()
 
     obj = 0
     for bitstring, count in counts.items():

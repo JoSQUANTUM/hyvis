@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hyvis"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
   "numpy>=1.26.4",
   "scikit-learn>=1.4.2",

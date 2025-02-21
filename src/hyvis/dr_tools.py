@@ -187,8 +187,12 @@ class Hessian:
         if not hasattr(self, "eigenvalues"):
             self.calc_evs()
 
-        plt.scatter(range(self.matrix.shape[0]), self.eigenvalues, **plot_kwargs)
-        plt.xlabel("placement, low to high")
+        plt.scatter(range(1, self.matrix.shape[0] + 1), self.eigenvalues, **plot_kwargs)
+        plt.xticks(
+            ticks=range(1, self.matrix.shape[0] + 1),
+            labels=range(1, self.matrix.shape[0] + 1),
+        )
+        plt.xlabel("index")
         plt.ylabel("eigenvalue")
 
 
@@ -263,7 +267,7 @@ def gramschmidt(V: np.ndarray):
     seem to be less accurate.
     """
 
-    U = np.zeros(shape=V.shape, dtype=V.dtype)
+    U = np.zeros(shape=V.shape, dtype=float)
     U[:, 0] = V[:, 0] / np.linalg.norm(V[:, 0])
     for i in range(1, V.shape[1]):
         U[:, i] = V[:, i]
